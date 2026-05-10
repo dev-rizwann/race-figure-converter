@@ -1,6 +1,6 @@
 # Race Figure Converter
 
-Streamlit app that converts a racing PDF into a one-sheet Excel output.
+Streamlit app that converts racing PDFs into a single Excel workbook.
 
 The output lists each race as a compact table with:
 
@@ -10,6 +10,10 @@ The output lists each race as a compact table with:
 - Figure = Weight lbs - Last Speed
 
 Rows are sorted lowest figure first within each race.
+
+The app accepts up to 10 PDFs at once. Each PDF gets its own output sheet in
+the workbook, plus a Source Audit sheet with the raw parsed source lines for
+checking accuracy.
 
 ## Run locally
 

@@ -18,6 +18,20 @@ TEXT = "1F2933"
 WHITE = "FFFFFF"
 
 
+def safe_sheet_title(value: str, used: set[str]) -> str:
+    cleaned = "".join(char if char not in r'[]:*?/\\' else " " for char in value).strip()
+    cleaned = " ".join(cleaned.split()) or "Output"
+    base = cleaned[:31]
+    candidate = base
+    index = 2
+    while candidate in used:
+        suffix = f" {index}"
+        candidate = f"{base[:31 - len(suffix)]}{suffix}"
+        index += 1
+    used.add(candidate)
+    return candidate
+
+
 def sorted_runners(runners: list[Runner]) -> list[Runner]:
     return sorted(
         runners,
@@ -86,14 +100,11 @@ def autosize_columns(ws) -> None:
         ws.column_dimensions[col].width = width
 
 
-def build_workbook(parsed: ParsedRaceFile) -> bytes:
-    wb = Workbook()
-    ws = wb.active
-    ws.title = "Daily Output"
+def write_output_sheet(ws, parsed: ParsedRaceFile, title: str) -> None:
     ws.sheet_view.showGridLines = False
 
     ws.merge_cells("A1:I1")
-    ws["A1"] = "Race Figure Output"
+    ws["A1"] = title
     ws["A1"].fill = PatternFill("solid", fgColor=TITLE_FILL)
     ws["A1"].font = Font(bold=True, color=WHITE, size=14)
     ws["A1"].alignment = Alignment(vertical="center")
@@ -128,12 +139,84 @@ def build_workbook(parsed: ParsedRaceFile) -> bytes:
     ws.sheet_properties.pageSetUpPr.fitToPage = True
     ws.page_margins = PageMargins(left=0.25, right=0.25, top=0.4, bottom=0.4)
 
+
+def write_audit_sheet(wb: Workbook, parsed_files: list[ParsedRaceFile], used_titles: set[str]) -> None:
+    audit = wb.create_sheet(safe_sheet_title("Source Audit", used_titles))
+    audit.sheet_view.showGridLines = False
+    audit.append(
+        [
+            "Source PDF",
+            "Race",
+            "Runner",
+            "Age",
+            "Weight",
+            "Weight lbs",
+            "Last Speed",
+            "Figure",
+            "Last Form Line",
+            "Performance Lines Parsed",
+        ]
+    )
+    for cell in audit[1]:
+        cell.fill = PatternFill("solid", fgColor=TITLE_FILL)
+        cell.font = Font(bold=True, color=WHITE)
+
+    for parsed in parsed_files:
+        for race in parsed.races:
+            for runner in sorted_runners(race.runners):
+                audit.append(
+                    [
+                        parsed.source_name,
+                        race.label,
+                        runner.name,
+                        runner.age,
+                        runner.weight,
+                        runner.weight_lbs,
+                        runner.last_speed_figure,
+                        runner.figure,
+                        runner.last_form_line,
+                        len(runner.performance_lines),
+                    ]
+                )
+
+    for idx, width in enumerate([30, 44, 34, 8, 10, 12, 12, 10, 96, 22], start=1):
+        audit.column_dimensions[get_column_letter(idx)].width = width
+    audit.freeze_panes = "A2"
+
+
+def build_combined_workbook(parsed_files: list[ParsedRaceFile]) -> bytes:
+    wb = Workbook()
+    wb.remove(wb.active)
+    used_titles: set[str] = set()
+
+    for parsed in parsed_files:
+        sheet_title = "Daily Output" if len(parsed_files) == 1 else Path(parsed.source_name).stem
+        ws = wb.create_sheet(safe_sheet_title(sheet_title, used_titles))
+        display_title = (
+            "Race Figure Output"
+            if len(parsed_files) == 1
+            else f"{Path(parsed.source_name).stem} - Race Figure Output"
+        )
+        write_output_sheet(ws, parsed, display_title)
+
+    write_audit_sheet(wb, parsed_files, used_titles)
+
     output = BytesIO()
     wb.save(output)
     return output.getvalue()
+
+
+def build_workbook(parsed: ParsedRaceFile) -> bytes:
+    return build_combined_workbook([parsed])
 
 
 def output_filename(source_name: str) -> str:
     stem = Path(source_name).stem or "race-output"
     safe = "".join(char if char.isalnum() or char in (" ", "-", "_") else "-" for char in stem)
     return f"{safe.strip()} - Race Figures.xlsx"
+
+
+def combined_output_filename(source_names: list[str]) -> str:
+    if len(source_names) == 1:
+        return output_filename(source_names[0])
+    return f"Race Figures - {len(source_names)} PDFs.xlsx"

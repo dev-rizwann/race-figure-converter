@@ -15,11 +15,7 @@ HEADING_RE = re.compile(
 )
 RUNNER_RE = re.compile(r"^(.+?)\s+(\d{1,2})\s+(\d{1,2}-\d{1,2})\s+(\d{2,3})$")
 PERFORMANCE_START_RE = re.compile(r"^\d+\s+")
-PERFORMANCE_END_RE = re.compile(
-    r"(?P<speed>-|\d+-?)\s+"
-    r"(?P<trip>r?\d+(?:\.\d+)?[A-Za-z]+)\s+"
-    r"(?P<rating>-|\d+-?)\s*$"
-)
+TRIP_RE = re.compile(r"^r?\d+(?:\.\d+)?[A-Za-z]+$")
 
 
 @dataclass
@@ -73,8 +69,27 @@ def clean_line(value: str) -> str:
 def parse_number_token(token: str) -> int | None:
     if token == "-":
         return None
-    stripped = token.rstrip("-")
-    return int(stripped) if stripped.isdigit() else None
+    match = re.match(r"^(\d+)", token)
+    return int(match.group(1)) if match else None
+
+
+def last_speed_from_line(line: str) -> int | None:
+    tokens = line.split()
+    for index in range(len(tokens) - 2, 0, -1):
+        if not TRIP_RE.match(tokens[index]):
+            continue
+        speed_token = tokens[index - 1]
+        if speed_token in {"h", "c", "b"} and index >= 2:
+            speed_token = tokens[index - 2] + speed_token
+        return parse_number_token(speed_token)
+    return None
+
+
+def line_has_trip_rating_tail(line: str) -> bool:
+    tokens = line.split()
+    if len(tokens) < 3:
+        return False
+    return any(TRIP_RE.match(tokens[index]) for index in range(max(0, len(tokens) - 3), len(tokens) - 1))
 
 
 def is_heading(line: str):
@@ -135,7 +150,7 @@ def parse_performance_lines(raw_lines: Iterable[str]) -> list[str]:
             continue
 
         if current:
-            if PERFORMANCE_END_RE.search(current):
+            if line_has_trip_rating_tail(current):
                 performance_lines.append(current)
                 current = None
             else:
@@ -155,11 +170,7 @@ def finalize_runner(runner: Runner) -> None:
     if not runner.last_form_line:
         return
 
-    match = PERFORMANCE_END_RE.search(runner.last_form_line)
-    if not match:
-        return
-
-    runner.last_speed_figure = parse_number_token(match.group("speed"))
+    runner.last_speed_figure = last_speed_from_line(runner.last_form_line)
     if runner.last_speed_figure is not None:
         runner.figure = runner.weight_lbs - runner.last_speed_figure
 
