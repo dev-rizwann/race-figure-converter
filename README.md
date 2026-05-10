@@ -23,5 +23,5 @@ streamlit run app.py
 1. Push this repo to GitHub.
 2. In Streamlit Community Cloud, choose **New app**.
 3. Select this repository.
-4. Set main file path to `app.py`.
+4. Set main file path to `streamlit_app.py`.
 5. Deploy.
