@@ -97,8 +97,8 @@ def is_runner_line(line: str):
         return None
 
     name = match.group(1).strip()
-    words = name.split()
-    if not words or any(not word[0].isalpha() or not word[0].isupper() for word in words):
+    first_alpha = next((c for c in name if c.isalpha()), None)
+    if first_alpha is None or first_alpha.islower():
         return None
     if is_heading(line):
         return None
