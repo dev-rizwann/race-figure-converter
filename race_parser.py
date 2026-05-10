@@ -15,7 +15,7 @@ HEADING_RE = re.compile(
 )
 RUNNER_RE = re.compile(r"^(.+?)\s+(\d{1,2})\s+(\d{1,2}-\d{1,2})\s+(\d{2,3})$")
 PERFORMANCE_START_RE = re.compile(r"^\d+\s+")
-TRIP_RE = re.compile(r"^r?\d+(?:\.\d+)?[A-Za-z]+$")
+TRIP_RE = re.compile(r"^r?\d{1,2}(?:\.\d+)?[A-Za-z]+$")
 
 
 @dataclass
