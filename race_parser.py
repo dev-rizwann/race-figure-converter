@@ -96,8 +96,9 @@ def is_runner_line(line: str):
     if not match:
         return None
 
-    name = match.group(1)
-    if name.upper() != name:
+    name = match.group(1).strip()
+    words = name.split()
+    if not words or any(not word[0].isalpha() or not word[0].isupper() for word in words):
         return None
     if is_heading(line):
         return None
