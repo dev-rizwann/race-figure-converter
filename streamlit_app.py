@@ -9,6 +9,7 @@ from workbook_builder import build_combined_workbook, combined_output_filename, 
 MAX_UPLOADS = 10
 MAX_FILE_MB = 10
 MAX_FILE_BYTES = MAX_FILE_MB * 1024 * 1024
+STANDOUT_THRESHOLD = 10
 
 
 st.set_page_config(page_title="Race Figure Converter", layout="wide")
@@ -38,6 +39,41 @@ def render_light_preview(parsed) -> None:
             st.write(f"{race.label}: {len(runners)} runners. Lowest: {best.name} ({best.figure}).")
         else:
             st.write(f"{race.label}: {len(runners)} runners. No usable last speed figures found.")
+
+
+def find_standouts(parsed_files, threshold: int = STANDOUT_THRESHOLD):
+    """For each race, if the best horse's figure is `threshold`+ lower than the
+    second-best horse's figure, return (source_name, race_label, runner_name,
+    figure, gap)."""
+    results = []
+    for parsed in parsed_files:
+        for race in parsed.races:
+            with_fig = [r for r in race.runners if r.figure is not None]
+            if len(with_fig) < 2:
+                continue
+            ranked = sorted(with_fig, key=lambda r: r.figure)
+            top, second = ranked[0], ranked[1]
+            gap = second.figure - top.figure
+            if gap >= threshold:
+                results.append((parsed.source_name, race.label, top.name, top.figure, gap))
+    return results
+
+
+def render_standouts(parsed_files) -> None:
+    standouts = find_standouts(parsed_files)
+    if not standouts:
+        st.write(f"No horses {STANDOUT_THRESHOLD}+ ahead of their field.")
+        return
+    grouped: dict[str, list] = {}
+    for src, race, name, fig, gap in standouts:
+        grouped.setdefault(src, []).append((race, name, fig, gap))
+    for parsed in parsed_files:
+        src = parsed.source_name
+        if src not in grouped:
+            continue
+        st.markdown(f"**{src}**")
+        for race, name, fig, gap in grouped[src]:
+            st.write(f"{race} — {name} (fig {fig}, +{gap})")
 
 
 if uploaded_files:
@@ -89,9 +125,14 @@ if uploaded_files:
     if blank_figures:
         st.warning(f"{blank_figures} runner(s) had no usable last speed figure, so their figure is blank.")
 
-    st.subheader("Detected races")
-    for parsed in parsed_files:
-        st.markdown(f"**{parsed.source_name}**")
-        render_light_preview(parsed)
+    left, right = st.columns(2)
+    with left:
+        st.subheader("Detected races")
+        for parsed in parsed_files:
+            st.markdown(f"**{parsed.source_name}**")
+            render_light_preview(parsed)
+    with right:
+        st.subheader(f"Standouts ({STANDOUT_THRESHOLD}+ ahead of field)")
+        render_standouts(parsed_files)
 else:
     st.info("Upload up to 10 race PDFs to create one Excel output.")
